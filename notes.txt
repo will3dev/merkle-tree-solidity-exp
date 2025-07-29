@@ -1,0 +1,4 @@
+Helpful resources:
+
+https://ethresear.ch/t/merkle-tree-with-o-1-append/14748
+
