@@ -2,7 +2,8 @@ pragma solidity ^0.8.0;
 
 
 /* TO DO:
-Because this is all calculated on-chain there is a risk that 
+Because this is all calculated on-chain there is a risk of race conditions when trying to validate merkle trees 
+To mitigate this issue we will need store a history of merkle roots and leaves. This would need to be a mapping to a struct of root and leaves.
 
 
 */

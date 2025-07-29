@@ -1,0 +1,26 @@
+{
+  "name": "merkle-tree-solidity",
+  "version": "1.0.0",
+  "description": "**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "test:ts": "ts-node test/typescript/merkle.test.ts",
+    "test:foundry": "forge test",
+    "test": "npm run test:foundry && npm run test:ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/chai": "^5.2.2",
+    "@types/node": "^24.1.0",
+    "chai": "^5.2.1",
+    "ethers": "^6.15.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  }
+}
