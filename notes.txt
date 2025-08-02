@@ -2,3 +2,6 @@ Helpful resources:
 
 https://ethresear.ch/t/merkle-tree-with-o-1-append/14748
 
+
+jq '.abi' out/MerkleTree.sol/MerkleTree.json > abi/MerkleTree.json
+npx typechain --target ethers-v6 --out-dir types 'abi/*.json'
