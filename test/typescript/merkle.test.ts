@@ -1,7 +1,9 @@
 import { ethers } from "ethers";
 import { expect, beforeEach, describe, it } from "vitest";
 //import { MerkleTree__factory } from "../../types/MerkleTree.sol.js";
-import MerkleTreeArtifact from "../../out/MerkleTree.sol/MerkleTree.json" with { type: "json" };
+import MerkleTreeTestArtifact from "../../out/MerkleTreeTest.sol/MerkleTreeTest.json" with { type: "json" };
+import { calculateMerkleRoot, hashValues, hashValue, generateMerkleProof} from "./helpers.js";
+
 
 describe("MerkleTree", function () {
 
@@ -18,8 +20,8 @@ describe("MerkleTree", function () {
         owner = accounts;
         
         const factory = new ethers.ContractFactory(
-            MerkleTreeArtifact.abi,
-            MerkleTreeArtifact.bytecode,
+            MerkleTreeTestArtifact.abi,
+            MerkleTreeTestArtifact.bytecode,
             owner
         );
         
@@ -29,8 +31,7 @@ describe("MerkleTree", function () {
     });
 
     it("should successfully add a leaf", async function () {
-        const merkleRootBefore = await merkleTree.getMerkleRoot();
-        expect(merkleRootBefore).to.equal(ethers.ZeroHash);
+        expect(await merkleTree.isValidRoot(ethers.ZeroHash)).to.equal(true);
         
         const leaf = ethers.keccak256(ethers.toUtf8Bytes("test"));
         const tx = await merkleTree.addLeaf(leaf);
@@ -38,17 +39,39 @@ describe("MerkleTree", function () {
 
         const leafCount = await merkleTree.getLeafCount();
 
-        const merkleRootAfter = await merkleTree.getMerkleRoot();
-
-        expect(merkleRootAfter).to.not.equal(merkleRootBefore);
-        expect(merkleRootAfter).to.equal(ethers.keccak256(ethers.toUtf8Bytes("test")));
+        expect(await merkleTree.isValidRoot(leaf)).to.equal(true);
     });
 
-    it("should calculate the correct merkle root", async function () {
+    it("should calculate the correct merkle root - even number of leaves", async function () {
         const leaves = [];
 
+        // calculate leaf values
         for (let i = 0; i < 4; i ++) {
-            const leaf = ethers.keccak256(ethers.toUtf8Bytes((i+1).toString()));
+            const leaf = await hashValue((i+1).toString());
+            leaves.push(leaf);
+        }
+
+        // add leaves to the tree
+        for (const leaf of leaves) {
+            const tx = await merkleTree.addLeaf(leaf);
+            const receipt = await tx.wait();
+            expect(receipt.status).to.equal(1);
+        }
+
+        const leavesFromTree = await merkleTree.getLeaves();
+
+        // manually calculate the merkleRoot
+        const merkleRootManual = await calculateMerkleRoot(leavesFromTree);
+
+        expect(await merkleTree.isValidRoot(merkleRootManual)).to.equal(true);  
+        
+    });
+
+    it("should calculate the correct merkle root - odd number of leaves", async function () {
+        const leaves = [];
+
+        for (let i = 0; i < 5; i ++) {
+            const leaf = await hashValue((i+1).toString());
             leaves.push(leaf);
         }
 
@@ -58,15 +81,10 @@ describe("MerkleTree", function () {
             expect(receipt.status).to.equal(1);
         }
 
-        const merkleRoot = await merkleTree.getMerkleRoot();
-        console.log("Merkle Root:", merkleRoot);
+        const leavesFromTree = await merkleTree.getLeaves();
+        const merkleRootManual = await calculateMerkleRoot(leavesFromTree);
 
-        const levelOneLeft = ethers.keccak256(ethers.concat([leaves[0], leaves[1]]));
-
-        const levelOneRight = ethers.keccak256(ethers.concat([leaves[2], leaves[3]]));
-        const merkleRootManual = ethers.keccak256(ethers.concat([levelOneLeft, levelOneRight]));
-
-        expect(merkleRoot).to.equal(merkleRootManual);  
+        expect(await merkleTree.isValidRoot(merkleRootManual)).to.equal(true);
         
     });
 
@@ -74,7 +92,7 @@ describe("MerkleTree", function () {
         const leaves = [];
 
         for (let i = 0; i < 4; i ++) {
-            const leaf = ethers.keccak256(ethers.toUtf8Bytes((i+1).toString()));
+            const leaf = await hashValue((i+1).toString());
             leaves.push(leaf);
         }
 
@@ -109,18 +127,19 @@ describe("MerkleTree", function () {
 
         // Debug: Check leaf count and merkle root
         const leafCount = await merkleTree.getLeafCount();
-        const merkleRoot = await merkleTree.getMerkleRoot();
+        const leavesFromTree = await merkleTree.getLeaves();
+        const merkleRoot = await calculateMerkleRoot(leavesFromTree);
 
         // Test proof for each leaf
         for (let i = 0; i < leaves.length; i++) {
             console.log("Generating proof for leaf", i);
-            const proof = await merkleTree.generateMerkleProof(i);
+            const proof = await generateMerkleProof(i, leavesFromTree);
 
             // Convert proof to a regular array if needed
             const proofArray = Array.from(proof);
             console.log("Proof Array:", proofArray);
 
-            const isValid = await merkleTree.validateProof(i, proofArray);
+            const isValid = await merkleTree.validateProof(i, proofArray, merkleRoot);
             console.log("Is Valid:", isValid);
             expect(isValid).to.equal(true);
         }
@@ -130,7 +149,7 @@ describe("MerkleTree", function () {
         const leaves = [];
 
         for (let i = 0; i < 4; i ++) {
-            const leaf = ethers.keccak256(ethers.toUtf8Bytes((i+1).toString()));
+            const leaf = await hashValue((i+1).toString());
             leaves.push(leaf);
         }
 
@@ -140,14 +159,17 @@ describe("MerkleTree", function () {
             expect(receipt.status).to.equal(1);
         }
 
+        const leavesFromTree = await merkleTree.getLeaves();
+        const merkleRoot = await calculateMerkleRoot(leavesFromTree);
+
         // Generate a valid proof
-        const proof = await merkleTree.generateMerkleProof(0);
+        const proof = await generateMerkleProof(0, leavesFromTree);
 
         // Convert proof to a regular array if needed
         const proofArray = Array.from(proof);
         
         try {
-            await merkleTree.validateProof(5, proofArray);
+            await merkleTree.validateProof(5, proofArray, merkleRoot);
             expect.fail("Should have reverted");
         } catch (error: any) {
             console.log(error.message);
@@ -169,15 +191,18 @@ describe("MerkleTree", function () {
             expect(receipt.status).to.equal(1);
         }
 
+        const leavesFromTree = await merkleTree.getLeaves();
+        const merkleRoot = await calculateMerkleRoot(leavesFromTree);
+
         // Create an invalid proof (wrong length)
         const invalidProof = [ethers.ZeroHash, ethers.ZeroHash];
         
         
-        const isValid = await merkleTree.validateProof(0, invalidProof);
+        const isValid = await merkleTree.validateProof(0, invalidProof, merkleRoot);
         expect(isValid).to.equal(false);
     });
 
-    it("should fail to validate a proof with an invalid proof length", async function () {
+    it("should fail to validate a proof with an invalid merkle root", async function () {
         const leaves = [];
 
         for (let i = 0; i < 4; i ++) {
@@ -191,14 +216,18 @@ describe("MerkleTree", function () {
             expect(receipt.status).to.equal(1);
         }
 
+
         // Create an invalid proof (wrong length)
         const invalidProof = [ethers.ZeroHash];
-        
+
+        const leavesFromTree = await merkleTree.getLeaves();
+        const merkleRoot = await hashValue("invalid");
+
         try {
-            await merkleTree.validateProof(0, invalidProof);
+            await merkleTree.validateProof(0, invalidProof, merkleRoot);
             expect.fail("Should have reverted");
         } catch (error: any) {
-            expect(error.message).to.include("Invalid proof length");
+            expect(error.message).to.include("RootDoesNotExist");
         }
     });
     
